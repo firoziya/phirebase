@@ -511,6 +511,12 @@ class Firestore:
         if not self.path:
             raise ValueError("Must call .document() before .subcollection()")
         
+        relative_path = self.path.replace(self.base_url, '').strip('/')
+        path_parts = relative_path.split('/')
+        
+        if len(path_parts) == 1:
+            raise ValueError("Must call .document() before .subcollection()")
+        
         self.path += f"/{subcollection_name}"
         self._reset_query()
         return self
