@@ -51,7 +51,9 @@ class TestFirestore:
         result = db.collection("users").add(sample_user_data)
         
         assert result["id"] == "abc123"
-        assert "name" in result
+        assert "id" in result
+        assert "path" in result
+        assert "create_time" in result
         mock_post.assert_called_once()
     
     @patch('phirebase.phirebase.requests.Session.get')

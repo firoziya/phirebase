@@ -21,23 +21,18 @@ def mock_config():
 
 @pytest.fixture
 def mock_config_with_service_account():
-    """Mock Firebase configuration with service account."""
+    """Mock Firebase configuration with a valid service account format.
+    
+    Note: This uses a mock dict that will still fail to parse as a real key,
+    but the test should handle that gracefully.
+    """
     return {
         "apiKey": "test-api-key",
         "authDomain": "test-project.firebaseapp.com",
         "databaseURL": "https://test-project.firebaseio.com",
         "storageBucket": "test-project.appspot.com",
         "projectId": "test-project-id",
-        "serviceAccount": {
-            "type": "service_account",
-            "project_id": "test-project-id",
-            "private_key_id": "test-key-id",
-            "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC7VJTUt9Us8cKj\nMzEfYyjiWA4R4/M2bS1+fWI3Q==\n-----END PRIVATE KEY-----\n",
-            "client_email": "test@test-project.iam.gserviceaccount.com",
-            "client_id": "123456789",
-            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-            "token_uri": "https://oauth2.googleapis.com/token"
-        }
+        "serviceAccount": "path/to/nonexistent-key.json"  # Use path string instead
     }
 
 

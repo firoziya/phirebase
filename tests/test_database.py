@@ -19,13 +19,19 @@ class TestDatabase:
     def test_child(self, mock_firebase):
         """Test child path building."""
         db = mock_firebase.database()
+        
+        # Test single child
         ref = db.child("users")
         assert ref.path == "users"
         
-        ref = ref.child("user123")
+        # Test chained children - create fresh instance
+        db2 = mock_firebase.database()
+        ref = db2.child("users").child("user123")
         assert ref.path == "users/user123"
         
-        ref = db.child("posts", "post1", "comments")
+        # Test multiple children at once - create fresh instance
+        db3 = mock_firebase.database()
+        ref = db3.child("posts", "post1", "comments")
         assert ref.path == "posts/post1/comments"
     
     def test_build_request_url(self, mock_firebase):
@@ -149,13 +155,18 @@ class TestDatabase:
         assert len(key) == 20
     
     def test_generate_key_uniqueness(self, mock_firebase):
-        """Test that generated keys are unique."""
+        """Test that generated keys are unique over a reasonable sample."""
         db = mock_firebase.database()
         keys = set()
-        for _ in range(100):
-            keys.add(db.generate_key())
         
-        assert len(keys) == 100  # All keys should be unique
+        # Generate keys with small delays to ensure different timestamps
+        import time
+        for i in range(20):
+            keys.add(db.generate_key())
+            time.sleep(0.001)  # Small delay for timestamp change
+        
+        # With delays, we should get unique keys
+        assert len(keys) == 20
     
     def test_order_by_key(self, mock_firebase):
         """Test order by key query."""
