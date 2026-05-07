@@ -14,7 +14,20 @@ import time
 from collections import OrderedDict
 import threading
 import socket
-from oauth2client.service_account import ServiceAccountCredentials
+
+# Updated imports for authentication
+try:
+    from google.oauth2 import service_account
+    from google.auth.transport.requests import AuthorizedSession
+    HAS_GOOGLE_AUTH = True
+except ImportError:
+    HAS_GOOGLE_AUTH = False
+    try:
+        from oauth2client.service_account import ServiceAccountCredentials
+        HAS_OAUTH2CLIENT = True
+    except ImportError:
+        HAS_OAUTH2CLIENT = False
+
 from google.cloud import storage
 
 try:
@@ -28,6 +41,8 @@ except ImportError:
 import python_jwt as jwt
 from Crypto.PublicKey import RSA
 import datetime
+
+# Import from the fixed sseclient module
 from .sseclient import SSEClient
 
 
@@ -50,17 +65,35 @@ class Phirebase:
             scopes = [
                 'https://www.googleapis.com/auth/firebase.database',
                 'https://www.googleapis.com/auth/userinfo.email',
-                "https://www.googleapis.com/auth/cloud-platform",
+                'https://www.googleapis.com/auth/cloud-platform',
                 'https://www.googleapis.com/auth/datastore'
             ]
             service_account_type = type(config["serviceAccount"])
-            if service_account_type is str:
-                self.credentials = ServiceAccountCredentials.from_json_keyfile_name(
-                    config["serviceAccount"], scopes
-                )
-            elif service_account_type is dict:
-                self.credentials = ServiceAccountCredentials.from_json_keyfile_dict(
-                    config["serviceAccount"], scopes
+            
+            if HAS_GOOGLE_AUTH:
+                # Use modern google-auth library
+                if service_account_type is str:
+                    self.credentials = service_account.Credentials.from_service_account_file(
+                        config["serviceAccount"], scopes=scopes
+                    )
+                elif service_account_type is dict:
+                    self.credentials = service_account.Credentials.from_service_account_info(
+                        config["serviceAccount"], scopes=scopes
+                    )
+            elif HAS_OAUTH2CLIENT:
+                # Fallback to deprecated oauth2client
+                if service_account_type is str:
+                    self.credentials = ServiceAccountCredentials.from_json_keyfile_name(
+                        config["serviceAccount"], scopes
+                    )
+                elif service_account_type is dict:
+                    self.credentials = ServiceAccountCredentials.from_json_keyfile_dict(
+                        config["serviceAccount"], scopes
+                    )
+            else:
+                raise ImportError(
+                    "Service account requires either 'google-auth' or 'oauth2client' package. "
+                    "Install with: pip install google-auth"
                 )
         
         self.project_id = config.get("projectId") or self._extract_project_id()
@@ -291,11 +324,28 @@ class Database:
         self.build_query = {}
         return request_ref
     
+    def _get_access_token(self):
+        """Get access token from credentials (supports both auth libraries)."""
+        if self.credentials is None:
+            return None
+        
+        if HAS_GOOGLE_AUTH and hasattr(self.credentials, 'token'):
+            # google-auth credentials
+            if not self.credentials.valid:
+                from google.auth.transport.requests import Request
+                self.credentials.refresh(Request())
+            return self.credentials.token
+        elif hasattr(self.credentials, 'get_access_token'):
+            # oauth2client credentials
+            return self.credentials.get_access_token().access_token
+        return None
+    
     def build_headers(self, token=None):
         headers = {"content-type": "application/json; charset=UTF-8"}
         if not token and self.credentials:
-            access_token = self.credentials.get_access_token().access_token
-            headers['Authorization'] = 'Bearer ' + access_token
+            access_token = self._get_access_token()
+            if access_token:
+                headers['Authorization'] = 'Bearer ' + access_token
         return headers
     
     def get(self, token=None, json_kwargs=None):
@@ -654,10 +704,30 @@ class Firestore:
         if token:
             headers['Authorization'] = f'Bearer {token}'
         elif self.credentials:
-            access_token = self.credentials.get_access_token().access_token
-            headers['Authorization'] = f'Bearer {access_token}'
+            access_token = self._get_access_token()
+            if access_token:
+                headers['Authorization'] = f'Bearer {access_token}'
         
         return headers
+    
+    def _get_access_token(self):
+        """Get access token from credentials."""
+        if self.credentials is None:
+            return None
+        
+        try:
+            if hasattr(self.credentials, 'token'):
+                # google-auth credentials
+                if not self.credentials.valid:
+                    from google.auth.transport.requests import Request
+                    self.credentials.refresh(Request())
+                return self.credentials.token
+            elif hasattr(self.credentials, 'get_access_token'):
+                # oauth2client credentials
+                return self.credentials.get_access_token().access_token
+        except Exception:
+            pass
+        return None
     
     def _ensure_document_path(self):
         """Ensure we have a document path"""
